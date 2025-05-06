@@ -16,6 +16,11 @@ from langchain.vectorstores import Chroma
 from langchain.schema import Document
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from RealtimeSTT import AudioToTextRecorder
+from sentence_transformers import SentenceTransformer
+
+
+model_1 = SentenceTransformer("all-MiniLM-L6-v2")
+model_1.save("local_models/all-MiniLM-L6-v2")
 
 # ─── Load Whisper Model ──────────────────────────────────────────────────────
 model = whisper.load_model("tiny.en")
