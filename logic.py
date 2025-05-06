@@ -1,6 +1,5 @@
 from pydantic import BaseModel
 import io
-
 import fitz  # PyMuPDF
 import os
 from dotenv import load_dotenv
@@ -8,7 +7,6 @@ from typing import List, Optional
 import whisper
 import tempfile
 import speech_recognition as sr
-import asyncio
 
 from langchain_groq import ChatGroq
 from langchain.prompts import PromptTemplate
@@ -19,14 +17,14 @@ from langchain.text_splitter import RecursiveCharacterTextSplitter
 from RealtimeSTT import AudioToTextRecorder
 from sentence_transformers import SentenceTransformer
 
-
+# ─── Embedding Model ─────────────────────────────────────────────────────────
 model_1 = SentenceTransformer("all-MiniLM-L6-v2")
 model_1.save("local_models/all-MiniLM-L6-v2")
 
 # ─── Load Whisper Model ──────────────────────────────────────────────────────
 model = whisper.load_model("tiny.en")
 
-# ─── Models ──────────────────────────────────────────────────────────────────
+# ─── Pydantic Models ─────────────────────────────────────────────────────────
 class UploadFeaturesResponse(BaseModel):
     status: str
     message: str
@@ -50,7 +48,6 @@ llm = ChatGroq(
     temperature=0,
     groq_api_key=GROQ_API_KEY
 )
-
 
 prompt_template = PromptTemplate(
     input_variables=["transcript", "top_sample", "product_info"],
@@ -100,14 +97,12 @@ product_store = Chroma(
 )
 product_retriever = product_store.as_retriever(search_kwargs={"k": 3})
 
-
 # ─── Utils ────────────────────────────────────────────────────────────────────
 def chunk_text(text: str) -> List[Document]:
     splitter = RecursiveCharacterTextSplitter(chunk_size=500, chunk_overlap=50)
     return [Document(page_content=chunk) for chunk in splitter.split_text(text)]
 
-
-async def extract_text_from_file(uploaded) -> str:
+def extract_text_from_file(uploaded) -> str:
     content = uploaded.read()
     if uploaded.filename.lower().endswith(".pdf"):
         pdf = fitz.open(stream=content, filetype="pdf")
@@ -116,7 +111,6 @@ async def extract_text_from_file(uploaded) -> str:
         return content.decode("utf-8")
     else:
         raise ValueError("Unsupported file format. Only PDF or TXT allowed.")
-
 
 def evaluate_transcript(transcript: str) -> str:
     top_examples = top_perf_retriever.get_relevant_documents(transcript)
@@ -131,9 +125,8 @@ def evaluate_transcript(transcript: str) -> str:
     llm_resp = llm.invoke([{"role": "user", "content": prompt}])
     return llm_resp.content
 
-
 # ─── Functional Versions of Former Endpoints ──────────────────────────────────
-async def upload_product_features_fn(product_file, gold_file=None) -> dict:
+def upload_product_features_fn(product_file, gold_file=None) -> dict:
     try:
         product_text = extract_text_from_file(product_file)
         product_docs = chunk_text(product_text)
@@ -151,14 +144,12 @@ async def upload_product_features_fn(product_file, gold_file=None) -> dict:
     except Exception as e:
         return {"status": "error", "message": f"Upload failed: {str(e)}"}
 
-
 def evaluate_fn(data: EvaluateRequest) -> dict:
     transcript = data.transcript
     evaluation = evaluate_transcript(transcript)
     return {"evaluation": evaluation}
 
-
-async def evaluate_audio_stt_fn(audio_file) -> dict:
+def evaluate_audio_stt_fn(audio_file) -> dict:
     try:
         audio_bytes = audio_file.read()
         recorder.set_microphone(False)
@@ -169,8 +160,7 @@ async def evaluate_audio_stt_fn(audio_file) -> dict:
     except Exception as e:
         return {"evaluation": str(e)}
 
-
-async def evaluate_audio_whisper_fn(audio_file) -> dict:
+def evaluate_audio_whisper_fn(audio_file) -> dict:
     try:
         audio_bytes = audio_file.read()
         with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as tmp:
@@ -185,7 +175,6 @@ async def evaluate_audio_whisper_fn(audio_file) -> dict:
         return {"transcript": transcript, "evaluation": evaluation}
     except Exception as e:
         return {"evaluation": f"Audio Evaluation Failed: {str(e)}"}
-
 
 # ─── Initialize STT ───────────────────────────────────────────────────────────
 recorder = AudioToTextRecorder(
