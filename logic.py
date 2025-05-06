@@ -1,147 +1,110 @@
-# ─── Imports ──────────────────────────────────────────────────────────────────
-# __import__('pysqlite3')
-# import sys
-# sys.modules['sqlite3'] = sys.modules.pop('pysqlite3')
-
-from pydantic import BaseModel
+import os
 import io
 import fitz  # PyMuPDF
-import os
+import faiss
+
+from pydantic import BaseModel
 from dotenv import load_dotenv
-from typing import List, Optional
+from typing import List
 import whisper
 import tempfile
 import speech_recognition as sr
-
 from langchain_groq import ChatGroq
 from langchain.prompts import PromptTemplate
 from langchain.embeddings import HuggingFaceEmbeddings
-from langchain.vectorstores import FAISS  # ✅ Switched to FAISS
+from langchain.vectorstores import FAISS  # Replaced Chroma with FAISS
 from langchain.schema import Document
 from langchain.text_splitter import RecursiveCharacterTextSplitter
-from RealtimeSTT import AudioToTextRecorder
-from sentence_transformers import SentenceTransformer
+# from RealtimeSTT import AudioToTextRecorder  # Import your real-time STT recorder
 
-# ─── Embedding Model ─────────────────────────────────────────────────────────
-model_1 = SentenceTransformer("all-MiniLM-L6-v2")
-model_1.save("local_models/all-MiniLM-L6-v2")
+# ─── Load Whisper Model Once ─────────────────────────────────────────────────
+# model = whisper.load_model("tiny.en")  # or "base", "medium", "large"
 
-# ─── Load Whisper Model ──────────────────────────────────────────────────────
-model = whisper.load_model("tiny.en")
 
-# ─── Pydantic Models ─────────────────────────────────────────────────────────
+# ─── Models ───────────────────────────────────────────────────────────────────
 class UploadFeaturesResponse(BaseModel):
     status: str
     message: str
 
+
 class EvaluateRequest(BaseModel):
     transcript: str
+
 
 class EvaluateResponse(BaseModel):
     evaluation: str
 
+
 class EvaluateAudioResponse(BaseModel):
     evaluation: str
-    transcript: str
+    transcript: str  # ✅ Add this line
+
 
 # ─── Init ─────────────────────────────────────────────────────────────────────
 load_dotenv()
 GROQ_API_KEY = os.getenv("GROQ_API_KEY")
 
+# Setup the LLM
 llm = ChatGroq(
     model_name="llama-3.3-70b-versatile",
     temperature=0,
     groq_api_key=GROQ_API_KEY
 )
 
+# Prompt template for evaluation
 prompt_template = PromptTemplate(
     input_variables=["transcript", "top_sample", "product_info"],
-    template="""..."""  # Unchanged prompt template body
+    template=""" 
+You are an expert evaluator tasked with analyzing a User Transcript for quality and completeness.
+
+Below is the User Transcript:
+{transcript}
+
+Below is a Top Performer Sample for comparison:
+{top_sample}
+
+Below is the Relevant Product Information:
+{product_info}
+
+Your task is to carefully compare the User Transcript against both the Top Performer Sample and the Product Information.
+
+Evaluate the following:
+1. How well does the transcript reflect the key product features and benefits?
+2. Does it match the tone, structure, and persuasive style of the top performer sample?
+3. Are any important product USPs (Unique Selling Propositions) missing or misrepresented?
+4. Does the transcript meet an appropriate length for a complete and informative response, or is it too short to be effective?
+
+Provide a comprehensive evaluation with the following structure:
+
+Output:
+- **Overall Score**: Out of 10 (Considering -  Content Accuracy: /10, Feature Coverage: /10, Tone & Style: /10, Length Appropriateness: /10)
+- **Strengths & Weaknesses**: Summarize what was done well and where it fell short.
+- **Missed Product USPs**: Highlight any key product features that were omitted or misrepresented.
+- **Improvement Tips**: Offer clear and actionable suggestions to elevate the transcript to top-performer quality.
+"""
 )
 
+# Embeddings for FAISS
 embeddings = HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2")
 
-# ─── Helper Functions to Load Documents ───────────────────────────────────────
-
-# ─── Load Top Performer Documents Using BytesIO ──────────────────────────────
-def load_top_perf_docs(file_data: bytes) -> List[Document]:
-    """
-    Load top performer documents from a file received as in-memory bytes.
-    The file_data (bytes) could be a .txt or .pdf file.
-    """
-    docs = []
-    
-    # Use BytesIO to handle the in-memory file
-    file_stream = io.BytesIO(file_data)
-    
-    # Determine file type (we'll assume either .txt or .pdf)
-    if file_stream.getbuffer().startswith(b"%PDF"):  # Check if PDF file
-        pdf = fitz.open(stream=file_stream, filetype="pdf")
-        text = ""
-        for page in pdf:
-            text += page.get_text()
-        docs.append(Document(page_content=text, metadata={"source": "top_performer.pdf"}))
-
-    else:
-        # If it's not a PDF, we assume it's a .txt file
-        text = file_stream.read().decode("utf-8")
-        docs.append(Document(page_content=text, metadata={"source": "top_performer.txt"}))
-
-    return docs
-
-# ─── Load Product Documents Using BytesIO ────────────────────────────────────
-def load_product_docs(file_data: bytes) -> List[Document]:
-    """
-    Load product documents from a file received as in-memory bytes.
-    The file_data (bytes) could be a .txt or .pdf file.
-    """
-    docs = []
-    
-    # Use BytesIO to handle the in-memory file
-    file_stream = io.BytesIO(file_data)
-    
-    # Determine file type (we'll assume either .txt or .pdf)
-    if file_stream.getbuffer().startswith(b"%PDF"):  # Check if PDF file
-        pdf = fitz.open(stream=file_stream, filetype="pdf")
-        text = ""
-        for page in pdf:
-            text += page.get_text()
-        docs.append(Document(page_content=text, metadata={"source": "product_doc.pdf"}))
-
-    else:
-        # If it's not a PDF, we assume it's a .txt file
-        text = file_stream.read().decode("utf-8")
-        docs.append(Document(page_content=text, metadata={"source": "product_doc.txt"}))
-
-    return docs
-
-# ─── FAISS Vector Store Initialization Without Loading ──────────────────────
-
-# Function to initialize the top performers store
-def initialize_top_perf_store() -> FAISS:
-    # Load your top performer documents
-    top_perf_docs = load_top_perf_docs()  # You need to implement this function
-    return FAISS.from_documents(top_perf_docs, embeddings)
-
-# Function to initialize the product store
-def initialize_product_store() -> FAISS:
-    # Load your product documents
-    product_docs = load_product_docs()  # You need to implement this function
-    return FAISS.from_documents(product_docs, embeddings)
-
-# Initialize the stores (this will run when the application starts or when needed)
-top_perf_store = initialize_top_perf_store()
-top_perf_retriever = top_perf_store.as_retriever(search_kwargs={"k": 3})
-
-product_store = initialize_product_store()
-product_retriever = product_store.as_retriever(search_kwargs={"k": 3})
+# ─── Helpers ─────────────────────────────────────────────────────────────────
+DB_ROOT = "db/faiss"
+TP_PATH = os.path.join(DB_ROOT, "top_performers")
+PD_PATH = os.path.join(DB_ROOT, "product_docs")
 
 # ─── Utils ────────────────────────────────────────────────────────────────────
 def chunk_text(text: str) -> List[Document]:
+    """
+    Split text into smaller chunks for processing.
+    """
     splitter = RecursiveCharacterTextSplitter(chunk_size=500, chunk_overlap=50)
     return [Document(page_content=chunk) for chunk in splitter.split_text(text)]
 
+
 def extract_text_from_file(uploaded) -> str:
+    """
+    Extract text from uploaded files (PDF or TXT).
+    """
     content = uploaded.read()
     if uploaded.filename.lower().endswith(".pdf"):
         pdf = fitz.open(stream=content, filetype="pdf")
@@ -151,76 +114,107 @@ def extract_text_from_file(uploaded) -> str:
     else:
         raise ValueError("Unsupported file format. Only PDF or TXT allowed.")
 
-def evaluate_transcript(transcript: str) -> str:
-    top_examples = top_perf_retriever.get_relevant_documents(transcript)
-    top_text = "\n".join(doc.page_content for doc in top_examples)
-    prod_examples = product_retriever.get_relevant_documents(transcript)
-    prod_text = "\n".join(doc.page_content for doc in prod_examples)
-    prompt = prompt_template.format(
-        transcript=transcript,
-        top_sample=top_text,
-        product_info=prod_text,
-    )
-    llm_resp = llm.invoke([{"role": "user", "content": prompt}])
-    return llm_resp.content
 
-# ─── Upload and Evaluate ──────────────────────────────────────────────────────
-def upload_product_features_fn(product_file, gold_file=None) -> dict:
+# ─── Upload Product + Gold Example ──────────────────────────────────────────────
+def upload_product_features(product_file, gold_file=None) -> dict:
     try:
+        # 1) ingest product docs
         product_text = extract_text_from_file(product_file)
         product_docs = chunk_text(product_text)
-        product_store = FAISS.from_documents(product_docs, embeddings)
-        product_store.save_local("db/product_docs")
+        pd_store = FAISS.from_documents(product_docs, embeddings)
+        os.makedirs(PD_PATH, exist_ok=True)
+        pd_store.save_local(PD_PATH)
 
+        msg = "Product doc uploaded."
+        # 2) ingest gold sample if provided
         if gold_file:
             gold_text = extract_text_from_file(gold_file)
             gold_docs = chunk_text(gold_text)
-            top_perf_store = FAISS.from_documents(gold_docs, embeddings)
-            top_perf_store.save_local("db/top_performers")
+            tp_store = FAISS.from_documents(gold_docs, embeddings)
+            os.makedirs(TP_PATH, exist_ok=True)
+            tp_store.save_local(TP_PATH)
+            msg += " Gold example added."
 
-        return {"status": "success", "message": "Product doc uploaded." + (" Gold example added." if gold_file else "")}
+        return {"status": "success", "message": msg}
 
     except Exception as e:
-        return {"status": "error", "message": f"Upload failed: {str(e)}"}
+        return {"status": "error", "message": str(e)}
 
-def evaluate_fn(data: EvaluateRequest) -> dict:
-    transcript = data.transcript
-    evaluation = evaluate_transcript(transcript)
-    return {"evaluation": evaluation}
 
-def evaluate_audio_stt_fn(audio_file) -> dict:
+# ─── Evaluate Transcript ──────────────────────────────────────────────────────
+
+def evaluate_transcript(transcript: str) -> str:
+    # 1) load the two persisted stores
+    tp_store = FAISS.load_local(TP_PATH, embeddings)
+    pd_store = FAISS.load_local(PD_PATH, embeddings)
+    # 2) retrieve top‐k
+    top_docs  = tp_store.similarity_search(transcript, k=3)
+    prod_docs = pd_store.similarity_search(transcript, k=3)
+    # 3) call LLM
+    prompt = prompt_template.format(
+        transcript=transcript,
+        top_sample="\n".join(d.page_content for d in top_docs),
+        product_info="\n".join(d.page_content for d in prod_docs),
+    )
+    return llm.invoke([{"role": "user", "content": prompt}]).content
+
+
+#
+# # ─── Evaluate Audio with Real-Time STT ──────────────────────────────────────────
+# def evaluate_audio_stt(audio_file) -> dict:
+#     """
+#     Evaluate an audio file using the real-time STT and perform the same transcript evaluation.
+#     """
+#     try:
+#         audio_bytes = audio_file.read()
+#         recorder.set_microphone(False)
+#         recorder.feed_audio(audio_bytes)
+#         transcript = recorder.text()
+#         evaluation = evaluate_transcript(transcript)
+#
+#         return {"transcript": transcript, "evaluation": evaluation}
+#
+#     except Exception as e:
+#         return {"evaluation": f"Audio Evaluation Failed: {str(e)}"}
+
+
+# ─── Evaluate Audio with Whisper ───────────────────────────────────────────────
+def evaluate_audio_whisper(audio_file) -> dict:
+    """
+    Evaluate an audio file using Whisper and perform the same transcript evaluation.
+    """
     try:
+        model = whisper.load_model("tiny.en")
         audio_bytes = audio_file.read()
-        recorder.set_microphone(False)
-        recorder.feed_audio(audio_bytes)
-        transcript = recorder.text()
-        evaluation = evaluate_transcript(transcript)
-        return {"transcript": transcript, "evaluation": evaluation}
-    except Exception as e:
-        return {"evaluation": str(e)}
 
-def evaluate_audio_whisper_fn(audio_file) -> dict:
-    try:
-        audio_bytes = audio_file.read()
+        # Write the audio to a temporary WAV file
         with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as tmp:
             tmp.write(audio_bytes)
             tmp_path = tmp.name
 
+        # Transcribe using Whisper
         whisper_result = model.transcribe(tmp_path)
         transcript = whisper_result["text"]
+
+        # Clean up the temporary file
         os.remove(tmp_path)
 
+        # Evaluate the transcript
         evaluation = evaluate_transcript(transcript)
         return {"transcript": transcript, "evaluation": evaluation}
+
     except Exception as e:
         return {"evaluation": f"Audio Evaluation Failed: {str(e)}"}
 
-# ─── Initialize STT ───────────────────────────────────────────────────────────
+
+# ─── Initialize Real-Time STT Recorder ─────────────────────────────────────────
 recorder = AudioToTextRecorder(
     spinner=False,
     silero_sensitivity=0.01,
     model="tiny.en",
-    language="en"
+    language="en"  # Disable continuous mic capture
 )
+
+# Immediately turn its mic off so it won’t buffer live audio
 recorder.set_microphone(False)
 
