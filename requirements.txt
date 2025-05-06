@@ -1,9 +1,11 @@
+# requirements.txt
+streamlit
+uvicorn
 fastapi
 pydantic
 python-multipart
-uvicorn
-fitz
 python-dotenv
+PyMuPDF
 whisper
 speechrecognition
 langchain
@@ -12,6 +14,8 @@ chromadb
 transformers
 sentence-transformers
 RealtimeSTT
-streamlit
-requests
 streamlit-mic-recorder
+requests
+
+# Pin rich to Streamlit’s version
+rich==14.0.0
