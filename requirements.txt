@@ -6,7 +6,7 @@ pydantic
 python-multipart
 python-dotenv
 PyMuPDF
-whisper
+openai-whisper
 speechrecognition
 langchain
 langchain-groq
