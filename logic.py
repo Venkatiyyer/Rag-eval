@@ -108,7 +108,7 @@ def chunk_text(text: str) -> List[Document]:
 
 
 async def extract_text_from_file(uploaded) -> str:
-    content = asyncio.run( uploaded.read())
+    content = uploaded.read()
     if uploaded.filename.lower().endswith(".pdf"):
         pdf = fitz.open(stream=content, filetype="pdf")
         return "".join(page.get_text() for page in pdf)
@@ -135,13 +135,13 @@ def evaluate_transcript(transcript: str) -> str:
 # ─── Functional Versions of Former Endpoints ──────────────────────────────────
 async def upload_product_features_fn(product_file, gold_file=None) -> dict:
     try:
-        product_text = asyncio.run( extract_text_from_file(product_file))
+        product_text = extract_text_from_file(product_file)
         product_docs = chunk_text(product_text)
         product_store.add_documents(product_docs)
         product_store.persist()
 
         if gold_file:
-            gold_text = asyncio.run( extract_text_from_file(gold_file))
+            gold_text = extract_text_from_file(gold_file)
             gold_docs = chunk_text(gold_text)
             top_perf_store.add_documents(gold_docs)
             top_perf_store.persist()
@@ -160,7 +160,7 @@ def evaluate_fn(data: EvaluateRequest) -> dict:
 
 async def evaluate_audio_stt_fn(audio_file) -> dict:
     try:
-        audio_bytes = asyncio.run( audio_file.read())
+        audio_bytes = audio_file.read()
         recorder.set_microphone(False)
         recorder.feed_audio(audio_bytes)
         transcript = recorder.text()
@@ -172,7 +172,7 @@ async def evaluate_audio_stt_fn(audio_file) -> dict:
 
 async def evaluate_audio_whisper_fn(audio_file) -> dict:
     try:
-        audio_bytes = asyncio.run( audio_file.read())
+        audio_bytes = audio_file.read()
         with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as tmp:
             tmp.write(audio_bytes)
             tmp_path = tmp.name
