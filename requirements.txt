@@ -17,6 +17,8 @@ RealtimeSTT
 streamlit-mic-recorder
 requests
 PyAudio
+langchain-community
+
 
 
 # Pin rich to Streamlit’s version
