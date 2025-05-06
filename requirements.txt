@@ -18,6 +18,9 @@ streamlit-mic-recorder
 requests
 PyAudio
 langchain-community
+langchain-chroma
+pysqlite3-binary        
+
 protobuf==3.20.*
 
 
