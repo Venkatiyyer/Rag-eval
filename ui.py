@@ -1,11 +1,10 @@
 import streamlit as st
 from io import BytesIO
 from streamlit_mic_recorder import mic_recorder
-
 from logic import (
-    upload_product_features_fn,
-    evaluate_fn,
-    evaluate_audio_whisper_fn
+    upload_product_features,
+    evaluate_transcript,
+    evaluate_audio_whisper,
 )
 
 # ─── Page Config ──────────────────────────────────────────────────────────────
@@ -61,37 +60,6 @@ st.sidebar.markdown('<div class="sidebar-step">2. Input (text/voice)</div>', uns
 st.sidebar.markdown('<div class="sidebar-step">3. Get score</div>', unsafe_allow_html=True)
 
 st.markdown("""
-    <style>
-        div[data-testid="stSidebar"] div[role="radiogroup"] label {
-            display: flex; align-items: center; gap: 8px;
-            font-family: 'Arial', sans-serif !important;
-            font-size: 16px !important; font-weight: bold !important;
-        }
-        div[data-testid="stSidebar"] div[role="radiogroup"] label:before {
-            content: '🔹'; font-size: 18px;
-        }
-        div[role="radiogroup"] > label > span {
-            font-size: 1.8rem !important; font-weight: 600 !important;
-        }
-        div[data-testid="stSidebar"] p {
-            font-size: 1.4rem !important; font-weight: 500 !important;
-        }
-        div[role="radiogroup"] { gap: 1.5rem !important; }
-    </style>
-""", unsafe_allow_html=True)
-
-# Sidebar radio button widget
-page = st.sidebar.radio("*Go to*", ["Upload", "Transcript Evaluation", "Audio Evaluation"])
-
-# Header
-col_icon, col_title = st.columns([0.075, 1], gap="small")
-with col_icon:
-    st.markdown("<div style='height:20px;'></div>", unsafe_allow_html=True)
-    st.image("static/recognition.png", width=50)
-with col_title:
-    st.markdown("## RAG-Eval")
-
-st.markdown("""
 <h2 style="margin-top:20px; font-weight:bold;">
   <span style="background: linear-gradient(90deg, #0021F3, #9400D3, #EE82EE);
     -webkit-background-clip: text; -webkit-text-fill-color: transparent;">
@@ -102,6 +70,16 @@ st.markdown("""
 </h2>
 """, unsafe_allow_html=True)
 
+# ─── Sidebar Page Navigation ─────────────────────────────────────────────────
+page = st.sidebar.radio("*Go to*", ["Upload", "Transcript Evaluation", "Audio Evaluation"])
+
+# Header
+col_icon, col_title = st.columns([0.075, 1], gap="small")
+with col_icon:
+    st.markdown("<div style='height:20px;'></div>", unsafe_allow_html=True)
+    st.image("static/recognition.png", width=50)
+with col_title:
+    st.markdown("## RAG-Eval")
 
 # ─── Helper Wrappers ──────────────────────────────────────────────────────────
 class _UploadWrapper:
@@ -109,7 +87,7 @@ class _UploadWrapper:
         self._file = st_file
         self.filename = st_file.name
 
-    async def read(self):
+    def read(self):
         return self._file.getvalue()
 
 class _BytesWrapper:
@@ -119,7 +97,6 @@ class _BytesWrapper:
 
     async def read(self):
         return self._bytes
-
 
 # ─── Page 1: Upload ───────────────────────────────────────────────────────────
 if page == "Upload":
@@ -139,12 +116,11 @@ if page == "Upload":
                 wrapped_gold = _UploadWrapper(gold_file) if gold_file else None
 
                 with st.spinner("📤 Processing upload..."):
-                    result = upload_product_features_fn(wrapped_prod, wrapped_gold )
+                    result = upload_product_features(wrapped_prod, wrapped_gold)
                 if result["status"] == "success":
                     st.success(result["message"])
                 else:
                     st.error(result["message"])
-
 
 # ─── Page 2: Transcript Evaluation ────────────────────────────────────────────
 elif page == "Transcript Evaluation":
@@ -155,13 +131,9 @@ elif page == "Transcript Evaluation":
             if not txt.strip():
                 st.warning("⚠️ Please enter a transcript.")
             else:
-                # Wrap into Pydantic model
-                from logic import EvaluateRequest
-                req = EvaluateRequest(transcript=txt)
-                result = evaluate_fn(req)
+                result = evaluate_transcript(txt)
                 st.subheader("📊 Evaluation Results")
-                st.markdown(result["evaluation"], unsafe_allow_html=True)
-
+                st.markdown(result, unsafe_allow_html=True)
 
 # ─── Page 3: Audio Evaluation ─────────────────────────────────────────────────
 elif page == "Audio Evaluation":
@@ -185,9 +157,10 @@ elif page == "Audio Evaluation":
             if st.button("🎧 Evaluate Audio"):
                 wrapped_audio = _BytesWrapper(wav)
                 with st.spinner("🔎 Evaluating audio with Whisper..."):
-                    result = evaluate_audio_whisper_fn(wrapped_audio)
+                    result = evaluate_audio_whisper(wrapped_audio)
 
                 st.subheader("🗒️ Transcript:")
                 st.code(result.get("transcript", "—"))
                 st.subheader("📊 Evaluation:")
                 st.markdown(result.get("evaluation", "—"), unsafe_allow_html=True)
+
