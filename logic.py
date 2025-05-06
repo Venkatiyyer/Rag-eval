@@ -61,6 +61,60 @@ prompt_template = PromptTemplate(
 
 embeddings = HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2")
 
+# ─── Helper Functions to Load Documents ───────────────────────────────────────
+
+# ─── Load Top Performer Documents Using BytesIO ──────────────────────────────
+def load_top_perf_docs(file_data: bytes) -> List[Document]:
+    """
+    Load top performer documents from a file received as in-memory bytes.
+    The file_data (bytes) could be a .txt or .pdf file.
+    """
+    docs = []
+    
+    # Use BytesIO to handle the in-memory file
+    file_stream = io.BytesIO(file_data)
+    
+    # Determine file type (we'll assume either .txt or .pdf)
+    if file_stream.getbuffer().startswith(b"%PDF"):  # Check if PDF file
+        pdf = fitz.open(stream=file_stream, filetype="pdf")
+        text = ""
+        for page in pdf:
+            text += page.get_text()
+        docs.append(Document(page_content=text, metadata={"source": "top_performer.pdf"}))
+
+    else:
+        # If it's not a PDF, we assume it's a .txt file
+        text = file_stream.read().decode("utf-8")
+        docs.append(Document(page_content=text, metadata={"source": "top_performer.txt"}))
+
+    return docs
+
+# ─── Load Product Documents Using BytesIO ────────────────────────────────────
+def load_product_docs(file_data: bytes) -> List[Document]:
+    """
+    Load product documents from a file received as in-memory bytes.
+    The file_data (bytes) could be a .txt or .pdf file.
+    """
+    docs = []
+    
+    # Use BytesIO to handle the in-memory file
+    file_stream = io.BytesIO(file_data)
+    
+    # Determine file type (we'll assume either .txt or .pdf)
+    if file_stream.getbuffer().startswith(b"%PDF"):  # Check if PDF file
+        pdf = fitz.open(stream=file_stream, filetype="pdf")
+        text = ""
+        for page in pdf:
+            text += page.get_text()
+        docs.append(Document(page_content=text, metadata={"source": "product_doc.pdf"}))
+
+    else:
+        # If it's not a PDF, we assume it's a .txt file
+        text = file_stream.read().decode("utf-8")
+        docs.append(Document(page_content=text, metadata={"source": "product_doc.txt"}))
+
+    return docs
+
 # ─── FAISS Vector Store Initialization Without Loading ──────────────────────
 
 # Function to initialize the top performers store
@@ -170,17 +224,3 @@ recorder = AudioToTextRecorder(
 )
 recorder.set_microphone(False)
 
-# ─── Helper Functions to Load Documents ───────────────────────────────────────
-def load_top_perf_docs() -> List[Document]:
-    # Implement your logic for loading top performer documents
-    # Example: You may fetch data from a file, database, or API.
-    docs = []
-    # This is where you load top performer documents, e.g., from a file or DB
-    return docs
-
-def load_product_docs() -> List[Document]:
-    # Implement your logic for loading product documents
-    # Example: You may fetch data from a file, database, or API.
-    docs = []
-    # This is where you load product documents, e.g., from a file or DB
-    return docs
