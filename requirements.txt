@@ -1,0 +1,17 @@
+fastapi
+pydantic
+python-multipart
+uvicorn
+fitz
+python-dotenv
+whisper
+speechrecognition
+langchain
+langchain-groq
+chromadb
+transformers
+sentence-transformers
+RealtimeSTT
+streamlit
+requests
+streamlit-mic-recorder
