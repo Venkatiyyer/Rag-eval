@@ -18,6 +18,8 @@ streamlit-mic-recorder
 requests
 PyAudio
 langchain-community
+protobuf==3.20.*
+
 
 
 
