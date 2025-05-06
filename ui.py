@@ -1,7 +1,6 @@
 import streamlit as st
 from io import BytesIO
 from streamlit_mic_recorder import mic_recorder
-import asyncio
 
 from logic import (
     upload_product_features_fn,
@@ -140,9 +139,7 @@ if page == "Upload":
                 wrapped_gold = _UploadWrapper(gold_file) if gold_file else None
 
                 with st.spinner("📤 Processing upload..."):
-                    result = asyncio.run(
-                        upload_product_features_fn(wrapped_prod, wrapped_gold)
-                    )
+                    result = upload_product_features_fn(wrapped_prod, wrapped_gold )
                 if result["status"] == "success":
                     st.success(result["message"])
                 else:
@@ -188,7 +185,7 @@ elif page == "Audio Evaluation":
             if st.button("🎧 Evaluate Audio"):
                 wrapped_audio = _BytesWrapper(wav)
                 with st.spinner("🔎 Evaluating audio with Whisper..."):
-                    result = asyncio.run(evaluate_audio_whisper_fn(wrapped_audio))
+                    result = evaluate_audio_whisper_fn(wrapped_audio)
 
                 st.subheader("🗒️ Transcript:")
                 st.code(result.get("transcript", "—"))
