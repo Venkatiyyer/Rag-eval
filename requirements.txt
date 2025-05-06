@@ -16,6 +16,8 @@ sentence-transformers
 RealtimeSTT
 streamlit-mic-recorder
 requests
+PyAudio
+
 
 # Pin rich to Streamlit’s version
 rich==14.0.0
