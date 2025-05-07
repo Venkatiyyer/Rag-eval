@@ -3,7 +3,9 @@ services:
     name: rag-eval-backend
     env: python
     plan: free
-    buildCommand: ""
+    buildCommand:
+      apt-get update && apt-get install -y portaudio19-dev
+
     startCommand: uvicorn main:app --host 0.0.0.0 --port 10000
     envVars:
       - key: PORT
