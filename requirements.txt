@@ -1,4 +1,6 @@
 # Core FastAPI requirements (keep all)
+numpy==1.26.4
+
 uvicorn>=0.15.0
 fastapi>=0.68.0
 pydantic>=2.0
