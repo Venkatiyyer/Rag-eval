@@ -16,7 +16,7 @@ torch>=2.0.1,<2.3.0 --extra-index-url https://download.pytorch.org/whl/cpu  # CP
 
 # LangChain core (keep)
 langchain-community
-langchain>=0.1.0
+langchain
 langchain-groq>=0.1.0  # Groq API essential
 
 
