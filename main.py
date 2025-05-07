@@ -9,7 +9,6 @@ from dotenv import load_dotenv
 from typing import List
 import whisper
 import tempfile
-import speech_recognition as sr
 
 from langchain_groq import ChatGroq
 from langchain.prompts import PromptTemplate
@@ -17,7 +16,6 @@ from langchain.embeddings import HuggingFaceEmbeddings
 from langchain.vectorstores import Chroma
 from langchain.schema import Document
 from langchain.text_splitter import RecursiveCharacterTextSplitter
-from RealtimeSTT import AudioToTextRecorder  # Import your real-time STT recorder
 
 # ─── Load Whisper Model Once ─────────────────────────────────────────────────
 model = whisper.load_model("tiny.en")  # or "base", "medium", "large"
@@ -221,34 +219,34 @@ def evaluate_transcript(transcript: str) -> str:
     return llm_resp.content
 
 
-# Initialize real-time STT recorder
-recorder = AudioToTextRecorder(
-    spinner=False,
-    silero_sensitivity=0.01,
-    model="tiny.en",
-    language="en"  # <<< disable continuous mic capture
+# # Initialize real-time STT recorder
+# recorder = AudioToTextRecorder(
+#     spinner=False,
+#     silero_sensitivity=0.01,
+#     model="tiny.en",
+#     language="en"  # <<< disable continuous mic capture
 
-)
+# )
 
-# Immediately turn its mic off so it won’t buffer live audio
-recorder.set_microphone(False)
-
-
-# ─── New /evaluate_audio Endpoint Using RealtimeSTT ──────────────────────────
-@app.post("/evaluate_audio_stt", response_model=EvaluateResponse)
-async def evaluate_audio(audio_file: UploadFile = File(...)):
-    try:
-        audio_bytes = await audio_file.read()
-        recorder.set_microphone(False)
-        recorder.feed_audio(audio_bytes)
-        transcript = recorder.text()
-        evaluation = evaluate_transcript(transcript)
-        print({"evaluation": evaluation, "transcript": transcript})
-        return EvaluateResponse(transcript=transcript, evaluation=evaluation)
+# # Immediately turn its mic off so it won’t buffer live audio
+# recorder.set_microphone(False)
 
 
-    except Exception as e:
-        return JSONResponse(status_code=500, content={"evaluation": str(e)})
+# # ─── New /evaluate_audio Endpoint Using RealtimeSTT ──────────────────────────
+# @app.post("/evaluate_audio_stt", response_model=EvaluateResponse)
+# async def evaluate_audio(audio_file: UploadFile = File(...)):
+#     try:
+#         audio_bytes = await audio_file.read()
+#         recorder.set_microphone(False)
+#         recorder.feed_audio(audio_bytes)
+#         transcript = recorder.text()
+#         evaluation = evaluate_transcript(transcript)
+#         print({"evaluation": evaluation, "transcript": transcript})
+#         return EvaluateResponse(transcript=transcript, evaluation=evaluation)
+
+
+#     except Exception as e:
+#         return JSONResponse(status_code=500, content={"evaluation": str(e)})
 
 
 # ─── New Whisper‐based Audio Endpoint ────────────────────────────────────────
