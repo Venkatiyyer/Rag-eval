@@ -16,7 +16,6 @@ sentence-transformers
 RealtimeSTT
 streamlit-mic-recorder
 requests
-PyAudio
 langchain-community
 #pysqlite3-binary>=0.5.0
  faiss-cpu
