@@ -18,9 +18,9 @@ from langchain.schema import Document
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 
 # ─── Load Whisper Model Once ─────────────────────────────────────────────────
-#model = whisper.load_model("tiny.en")  # or "base", "medium", "large"
+model = whisper.load_model("tiny.en",device="cpu")  # or "base", "medium", "large"
 # Replace with more memory-efficient loading
-model = whisper.load_model("tiny.en", device="cpu", download_root="/tmp/whisper")
+#model = whisper.load_model("tiny.en", device="cpu", download_root="/tmp/whisper")
 
 
 # ─── Models ───────────────────────────────────────────────────────────────────
