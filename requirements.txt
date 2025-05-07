@@ -13,8 +13,10 @@ openai-whisper==20231117  # 45MB (slimmer than git install)
 torch>=2.0.1,<2.3.0 --extra-index-url https://download.pytorch.org/whl/cpu  # CPU-only (saves ~800MB)
 
 # LangChain core (keep)
+langchain-community
 langchain>=0.1.0
 langchain-groq>=0.1.0  # Groq API essential
+
 
 # Embeddings (optimized)
 sentence-transformers>=2.2.2  # Switch to all-minilm-l6-v2 model (saves ~200MB)
