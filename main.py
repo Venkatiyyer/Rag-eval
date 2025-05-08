@@ -9,11 +9,13 @@ from dotenv import load_dotenv
 from typing import List
 import whisper
 import tempfile
+from pathlib import Path
+
 
 from langchain_groq import ChatGroq
 from langchain.prompts import PromptTemplate
 from langchain.embeddings import HuggingFaceEmbeddings
-from langchain.vectorstores import Chroma
+from langchain.vectorstores import FAISS
 from langchain.schema import Document
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 
@@ -86,20 +88,36 @@ Output:
 
 embeddings = HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2")
 
-# ─── Vector Stores ────────────────────────────────────────────────────────────
-top_perf_store = Chroma(
-    embedding_function=embeddings,
-    collection_name="top_performers",
-    persist_directory="db/top_performers"
-)
-top_perf_retriever = top_perf_store.as_retriever(search_kwargs={"k": 3})
+# # ─── Vector Stores ────────────────────────────────────────────────────────────
+# # Always load existing FAISS indices; they must be created via /upload_product_features first
+# # Allow pickle deserialization since you trust your own data
+#
+# top_perf_store = FAISS.load_local("db/top_performers_faiss", embeddings,allow_dangerous_deserialization=True)
+# top_perf_retriever = top_perf_store.as_retriever(search_kwargs={"k": 3})
+#
+# product_store = FAISS.load_local("db/product_docs_faiss", embeddings, allow_dangerous_deserialization=True)
+# product_retriever = product_store.as_retriever(search_kwargs={"k": 3})
 
-product_store = Chroma(
-    embedding_function=embeddings,
-    collection_name="product_docs",
-    persist_directory="db/product_docs"
-)
-product_retriever = product_store.as_retriever(search_kwargs={"k": 3})
+# Vector db var initialisation
+
+top_perf_store = None
+top_perf_retriever = None
+product_store = None
+product_retriever = None
+
+# helper function for lazy loading:
+
+# def load_vector_stores():
+#     global top_perf_store, top_perf_retriever, product_store, product_retriever
+#     if top_perf_store is None and Path("db/top_performers_faiss/index.faiss").exists():
+#         top_perf_store = FAISS.load_local("db/top_performers_faiss", embeddings, allow_dangerous_deserialization=True)
+#         top_perf_retriever = top_perf_store.as_retriever(search_kwargs={"k": 3})
+#
+#     if product_store is None and Path("db/product_docs_faiss/index.faiss").exists():
+#         product_store = FAISS.load_local("db/product_docs_faiss", embeddings, allow_dangerous_deserialization=True)
+#         product_retriever = product_store.as_retriever(search_kwargs={"k": 3})
+
+
 
 
 # ─── Utils ────────────────────────────────────────────────────────────────────
@@ -125,17 +143,19 @@ async def upload_product_features(
         product_file: UploadFile = File(...),
         gold_file: UploadFile = File(None)
 ):
+    global product_store ,top_perf_store
+
     try:
         product_text = await extract_text_from_file(product_file)
         product_docs = chunk_text(product_text)
-        product_store.add_documents(product_docs)
-        product_store.persist()
+        product_store = FAISS.from_documents(product_docs, embedding=embeddings)
+        product_store.save_local("db/product_docs_faiss")
 
         if gold_file:
             gold_text = await extract_text_from_file(gold_file)
             gold_docs = chunk_text(gold_text)
-            top_perf_store.add_documents(gold_docs)
-            top_perf_store.persist()
+            top_perf_store = FAISS.from_documents(gold_docs, embedding=embeddings)
+            top_perf_store.save_local("db/top_performers_faiss")
 
         return UploadFeaturesResponse(
             status="success",
@@ -152,9 +172,11 @@ async def upload_product_features(
 @app.post("/evaluate", response_model=EvaluateResponse)
 async def evaluate(data: EvaluateRequest):
     transcript = data.transcript
-    top_examples = top_perf_retriever.get_relevant_documents(transcript)
+
+    top_examples = top_perf_store.similarity_search(transcript, k=3)
     top_text = "\n".join(doc.page_content for doc in top_examples)
-    product_info = product_retriever.get_relevant_documents(transcript)
+
+    product_info = product_store.similarity_search(transcript, k=3)
     product_text = "\n".join(doc.page_content for doc in product_info)
 
     prompt = prompt_template.format(
@@ -206,10 +228,10 @@ async def evaluate(data: EvaluateRequest):
 # ─── Helper ───────────────────────────────────────────────────────────────────
 def evaluate_transcript(transcript: str) -> str:
     # pull top examples
-    top_examples = top_perf_retriever.get_relevant_documents(transcript)
+    top_examples = top_perf_store.similarity_search(transcript, k=3)
     top_text = "\n".join(doc.page_content for doc in top_examples)
     # pull product docs
-    prod_examples = product_retriever.get_relevant_documents(transcript)
+    prod_examples = product_store.similarity_search(transcript, k=3)
     prod_text = "\n".join(doc.page_content for doc in prod_examples)
     # build prompt + call LLM
     prompt = prompt_template.format(
