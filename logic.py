@@ -5,7 +5,7 @@ import faiss
 
 from pydantic import BaseModel
 from dotenv import load_dotenv
-from typing import List
+from typing import List, Optional , IO
 import whisper
 import tempfile
 import speech_recognition as sr
@@ -128,31 +128,27 @@ def extract_text_from_file(uploaded_file) -> str:
         raise ValueError("Unsupported file format. Only PDF or TXT allowed.")
 
 
-def extract_and_store_in_faiss(product_file, gold_file=None) -> dict:
-    """Extracts text from product and gold example files, stores them in FAISS."""
+
+# ─── Ingestion ───────────────────────────────────────────────────────────────
+def extract_and_store_in_faiss(product_file, gold_file: Optional[IO] = None) -> dict:
+    """Extracts text, stores FAISS indices on disk, and returns extracted text."""
     try:
-        # 1) Process product document
+        # Product docs
         product_text = extract_text_from_file(product_file)
         product_docs = chunk_text(product_text)
-        product_store = FAISS.from_documents(product_docs, embeddings)
+        prod_store = FAISS.from_documents(product_docs, embeddings)
         os.makedirs(PD_PATH, exist_ok=True)
-        product_store.save_local(PD_PATH)
-        
-        gold_text, gold_store = None, None
-        msg = "Product doc uploaded and stored in FAISS."
-        print(product_store)
-        
-        # 2) Process gold sample if provided
+        prod_store.save_local(PD_PATH)
+
+        gold_text = None
         if gold_file:
             gold_text = extract_text_from_file(gold_file)
             gold_docs = chunk_text(gold_text)
-            top_perf_store = FAISS.from_documents(gold_docs, embeddings)
+            gold_store = FAISS.from_documents(gold_docs, embeddings)
             os.makedirs(TP_PATH, exist_ok=True)
-            top_perf_store.save_local(TP_PATH)
-            msg += " Gold example added and stored in FAISS."
+            gold_store.save_local(TP_PATH)
 
-        return {"status": "success", "message": msg}
-
+        return {"status": "success", "product_text": product_text, "gold_text": gold_text}
     except Exception as e:
         return {"status": "error", "message": str(e)}
 
@@ -179,11 +175,11 @@ def evaluate_transcript(transcript: str) -> str:
             embeddings,
             allow_dangerous_deserialization=True
         )
-        top_examples = top_perf_store.vectorstore.similarity_search(transcript, k=3)
+        top_examples = top_perf_store.similarity_search(transcript, k=3)
         top_text = "".join(doc.page_content for doc in top_examples)
 
     # Product similarity
-    prod_examples = product_store.vectorstore.similarity_search(transcript, k=3)
+    prod_examples = product_store.similarity_search(transcript, k=3)
     prod_text = "".join(doc.page_content for doc in prod_examples)
 
     # Build prompt and invoke LLM
@@ -237,13 +233,13 @@ def evaluate_transcript(transcript: str) -> str:
         top_examples   = top_perf_store.similarity_search(transcript, k=3)
         top_text       = "\n".join(doc.page_content for doc in top_examples)
 
-    # build prompt and invoke LLM
-    prompt = prompt_template.format(
-        transcript   = transcript,
-        top_sample   = top_text,
-        product_info = prod_text
-    )
-    return llm.invoke([{"role": "user", "content": prompt}]).content
+    # # build prompt and invoke LLM
+    # prompt = prompt_template.format(
+    #     transcript   = transcript,
+    #     top_sample   = top_text,
+    #     product_info = prod_text
+    # )
+    # return llm.invoke([{"role": "user", "content": prompt}]).content
 
     # Build prompt
     prompt = prompt_template.format(
@@ -283,28 +279,20 @@ def evaluate_audio_whisper(audio_bytes: bytes) -> str:
 
         # 2) Run Whisper transcription
         whisper_result = model.transcribe(tmp_path)
-        transcript = whisper_result["text"]
+        transcript = whisper_result.get("text", "")
+
+        
 
         # 3) Clean up temp file
         os.remove(tmp_path)
 
         # 4) Evaluate the transcript using your existing logic
         evaluation = evaluate_transcript(transcript)
-        return transcript, evaluation
+        return {"transcript":transcript, "evaluation":evaluation}
 
     except Exception as e:
-        return str(e)
+        return {"transcript": "", "evaluation": str(e)}
 
 
 
-# # Example usage (replace with actual file paths)
-# product_file = open("temp\Product Features Document.pdf", "rb")  # Replace with your actual product file path
-# gold_file = open("temp\Gold eg.txt", "rb")  # Optional: Replace with your actual gold file path
-# # Assuming product_docs is a list of documents and embeddings is the vectorizer
-# product_store = FAISS.from_documents(product_file, embeddings)
-
-# # You can now use the product_store for operations like similarity search
-# query = "example query text"
-# results = product_store.similarity_search(query, k=5)
-# print(results)
 

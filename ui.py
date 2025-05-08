@@ -77,57 +77,59 @@ with col_icon:
 with col_title:
     st.markdown("## RAG-Eval")
 
-# # ─── Page 1: Upload ───────────────────────────────────────────────────────────
-# if page == "Upload":
-#     st.image("static/upload.png", width=50)
-#     with st.expander("📁 Upload Product Features and Gold Example", expanded=True):
-#         col1, col2 = st.columns(2)
-#         with col1:
-#             product_file = st.file_uploader("Upload Product Features (PDF/TXT)", type=["pdf", "txt"])
-#         with col2:
-#             gold_file = st.file_uploader("Upload Gold Example (PDF/TXT)", type=["pdf", "txt"])
-
-#         if st.button("⬆️ Upload Files"):
-#             if not product_file:
-#                 st.warning("⚠️ Please upload the product file.")
-#             else:
-#                 try:
-#                     with st.spinner("📤 Extracting Product Features..."):
-#                         product_text = extract_and_store_in_faiss(product_file)
-#                         st.session_state["product_text"] = product_text
-
-#                     if gold_file:
-#                         with st.spinner("📤 Extracting Gold Example..."):
-#                             gold_text = extract_and_store_in_faiss(gold_file)
-#                             st.session_state["gold_text"] = gold_text
-#                         st.success("✅ Both product and gold example uploaded successfully!")
-#                     else:
-#                         st.success("✅ Product features uploaded successfully! (No gold example provided)")
-#                 except Exception as e:
-#                     st.error(f"❌ Error during upload: {str(e)}")
-
-
-# ─── Page 1: Upload ───────────────────────────────────────────────────────────
+# ───# Page 1: Upload ───────────────────────────────────────────────────────────
 if page == "Upload":
     st.image("static/upload.png", width=50)
-
     with st.expander("📁 Upload Product Features and Gold Example", expanded=True):
         col1, col2 = st.columns(2)
-
         with col1:
             product_file = st.file_uploader("Upload Product Features (PDF/TXT)", type=["pdf", "txt"])
-
         with col2:
             gold_file = st.file_uploader("Upload Gold Example (PDF/TXT)", type=["pdf", "txt"])
 
         if st.button("⬆️ Upload Files"):
             if not product_file:
-                st.warning("⚠️ Please upload the product features file.")
+                st.warning("⚠️ Please upload the product file.")
             else:
-                # try:
-                with st.spinner("📤 Processing files..."):
-                    result = extract_and_store_in_faiss(product_file, gold_file)
-                    print(result)
+                try:
+                    with st.spinner("📤 Extracting and Saving to FAISS..."):
+                        result = extract_and_store_in_faiss(product_file, gold_file)
+                        st.session_state["product_text"] = result.get("product_text", "")
+                        st.session_state["gold_text"] = result.get("gold_text", "")
+
+                    if result["status"] == "success":
+                        if gold_file:
+                            st.success("✅ Both product and gold example uploaded successfully!")
+                        else:
+                            st.success("✅ Product features uploaded successfully! (No gold example provided)")
+                    else:
+                        st.error(f"❌ Upload failed: {result.get('message', 'Unknown error')}")
+                except Exception as e:
+                    st.error(f"❌ Error during upload: {str(e)}")
+
+
+
+# # ─── Page 1: Upload ───────────────────────────────────────────────────────────
+# if page == "Upload":
+#     st.image("static/upload.png", width=50)
+
+#     with st.expander("📁 Upload Product Features and Gold Example", expanded=True):
+#         col1, col2 = st.columns(2)
+
+#         with col1:
+#             product_file = st.file_uploader("Upload Product Features (PDF/TXT)", type=["pdf", "txt"])
+
+#         with col2:
+#             gold_file = st.file_uploader("Upload Gold Example (PDF/TXT)", type=["pdf", "txt"])
+
+#         if st.button("⬆️ Upload Files"):
+#             if not product_file:
+#                 st.warning("⚠️ Please upload the product features file.")
+#             else:
+#                 # try:
+#                 with st.spinner("📤 Processing files..."):
+#                     result = extract_and_store_in_faiss(product_file, gold_file)
+#                     print(result)
                         
                         
 
@@ -183,7 +185,8 @@ elif page == "Audio Evaluation":
                     result = evaluate_audio_whisper(wav)
 
                 st.subheader("🗒️ Transcript:")
-                # st.code(result.get("transcript", "—"))
+                st.code(result.get("transcript", "—"))
+
                 st.subheader("📊 Evaluation:")
-                #st.markdown(result.get("evaluation", "—"), unsafe_allow_html=True)
-                st.markdown(result, unsafe_allow_html=True)
+                st.markdown(result.get("evaluation" ,"—"), unsafe_allow_html=True)
+                # st.markdown(result, unsafe_allow_html=True)
