@@ -20,7 +20,7 @@ from langchain.schema import Document
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 
 # ─── Load Whisper Model Once ─────────────────────────────────────────────────
-model = whisper.load_model("tiny.en",device="cpu")  # or "base", "medium", "large"
+model = None
 # Replace with more memory-efficient loading
 #model = whisper.load_model("tiny.en", device="cpu", download_root="/tmp/whisper")
 
@@ -284,6 +284,9 @@ async def evaluate_audio(audio_file: UploadFile = File(...)):
         with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as tmp:
             tmp.write(audio_bytes)
             tmp_path = tmp.name
+            
+        model = whisper.load_model("tiny.en",device="cpu")  # or "base", "medium", "large"
+
 
         # 3) Run Whisper transcription
         whisper_result = model.transcribe(tmp_path)
