@@ -1,8 +1,8 @@
 import streamlit as st
-from io import BytesIO
 from streamlit_mic_recorder import mic_recorder
 from logic import (
-    upload_product_features,
+    extract_text_from_file,
+    extract_and_store_in_faiss,
     evaluate_transcript,
     evaluate_audio_whisper,
 )
@@ -13,10 +13,8 @@ st.set_page_config(page_title="RAG-Eval by Venkat Iyer", layout="wide", initial_
 # ─── Custom CSS Styling ───────────────────────────────────────────────────────
 st.markdown("""
     <style>
-        /* Sidebar customization */
         [data-testid="stSidebar"] { background-color: #2c3e50; color: #ecf0f1; }
         [data-testid="stSidebar"] .css-1d391kg { color: #ecf0f1; }
-        /* Main content area */
         .block-container { padding-top: 2rem; padding-bottom: 2rem; }
         h1, h2, h3 { color: #2c3e50; }
         .stButton > button {
@@ -25,7 +23,6 @@ st.markdown("""
         }
         .stButton > button:hover { background-color: #388e3c; }
         textarea, input[type="file"] { border-radius: 8px !important; }
-        /* Radio button labels */
         label[data-testid="stRadioLabel"] > div {
             font-size: 1.1rem; font-weight: 500; color: #ecf0f1;
         }
@@ -42,7 +39,6 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-# ─── Sidebar Navigation ───────────────────────────────────────────────────────
 st.markdown("""
     <style>
     .sidebar-title {
@@ -81,46 +77,74 @@ with col_icon:
 with col_title:
     st.markdown("## RAG-Eval")
 
-# ─── Helper Wrappers ──────────────────────────────────────────────────────────
-class _UploadWrapper:
-    def __init__(self, st_file):
-        self._file = st_file
-        self.filename = st_file.name
+# # ─── Page 1: Upload ───────────────────────────────────────────────────────────
+# if page == "Upload":
+#     st.image("static/upload.png", width=50)
+#     with st.expander("📁 Upload Product Features and Gold Example", expanded=True):
+#         col1, col2 = st.columns(2)
+#         with col1:
+#             product_file = st.file_uploader("Upload Product Features (PDF/TXT)", type=["pdf", "txt"])
+#         with col2:
+#             gold_file = st.file_uploader("Upload Gold Example (PDF/TXT)", type=["pdf", "txt"])
 
-    def read(self):
-        return self._file.getvalue()
+#         if st.button("⬆️ Upload Files"):
+#             if not product_file:
+#                 st.warning("⚠️ Please upload the product file.")
+#             else:
+#                 try:
+#                     with st.spinner("📤 Extracting Product Features..."):
+#                         product_text = extract_and_store_in_faiss(product_file)
+#                         st.session_state["product_text"] = product_text
 
-class _BytesWrapper:
-    def __init__(self, b, name="audio.wav"):
-        self._bytes = b
-        self.filename = name
+#                     if gold_file:
+#                         with st.spinner("📤 Extracting Gold Example..."):
+#                             gold_text = extract_and_store_in_faiss(gold_file)
+#                             st.session_state["gold_text"] = gold_text
+#                         st.success("✅ Both product and gold example uploaded successfully!")
+#                     else:
+#                         st.success("✅ Product features uploaded successfully! (No gold example provided)")
+#                 except Exception as e:
+#                     st.error(f"❌ Error during upload: {str(e)}")
 
-    async def read(self):
-        return self._bytes
 
 # ─── Page 1: Upload ───────────────────────────────────────────────────────────
 if page == "Upload":
     st.image("static/upload.png", width=50)
+
     with st.expander("📁 Upload Product Features and Gold Example", expanded=True):
         col1, col2 = st.columns(2)
+
         with col1:
             product_file = st.file_uploader("Upload Product Features (PDF/TXT)", type=["pdf", "txt"])
+
         with col2:
             gold_file = st.file_uploader("Upload Gold Example (PDF/TXT)", type=["pdf", "txt"])
 
         if st.button("⬆️ Upload Files"):
             if not product_file:
-                st.warning("⚠️ Please upload the product file.")
+                st.warning("⚠️ Please upload the product features file.")
             else:
-                wrapped_prod = _UploadWrapper(product_file)
-                wrapped_gold = _UploadWrapper(gold_file) if gold_file else None
+                # try:
+                with st.spinner("📤 Processing files..."):
+                    result = extract_and_store_in_faiss(product_file, gold_file)
+                    print(result)
+                        
+                        
 
-                with st.spinner("📤 Processing upload..."):
-                    result = upload_product_features(wrapped_prod, wrapped_gold)
-                if result["status"] == "success":
-                    st.success(result["message"])
-                else:
-                    st.error(result["message"])
+                #     if result["status"] == "success":
+                #         st.session_state["product_text"] = result["product_text"]
+                #         st.session_state["gold_text"] = result["gold_text"] if gold_file else None
+
+                #         if gold_file:
+                #             st.success("✅ Both product features and gold example uploaded successfully!")
+                #         else:
+                #             st.success("✅ Product features uploaded successfully! (No gold example provided)")
+                #     else:
+                #         st.error(f"❌ Error during upload: {result['message']}")
+
+                # except Exception as e:
+                #     st.error(f"❌ An unexpected error occurred: {str(e)}")
+
 
 # ─── Page 2: Transcript Evaluation ────────────────────────────────────────────
 elif page == "Transcript Evaluation":
@@ -155,12 +179,11 @@ elif page == "Audio Evaluation":
             st.audio(wav, format="audio/wav")
 
             if st.button("🎧 Evaluate Audio"):
-                wrapped_audio = _BytesWrapper(wav)
                 with st.spinner("🔎 Evaluating audio with Whisper..."):
-                    result = evaluate_audio_whisper(wrapped_audio)
+                    result = evaluate_audio_whisper(wav)
 
                 st.subheader("🗒️ Transcript:")
-                st.code(result.get("transcript", "—"))
+                # st.code(result.get("transcript", "—"))
                 st.subheader("📊 Evaluation:")
-                st.markdown(result.get("evaluation", "—"), unsafe_allow_html=True)
-
+                #st.markdown(result.get("evaluation", "—"), unsafe_allow_html=True)
+                st.markdown(result, unsafe_allow_html=True)

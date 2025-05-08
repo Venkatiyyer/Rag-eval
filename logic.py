@@ -16,28 +16,38 @@ from langchain.vectorstores import FAISS  # Replaced Chroma with FAISS
 from langchain.schema import Document
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 # from RealtimeSTT import AudioToTextRecorder  # Import your real-time STT recorder
+import tempfile
 
 # ─── Load Whisper Model Once ─────────────────────────────────────────────────
 # model = whisper.load_model("tiny.en")  # or "base", "medium", "large"
 
-
-# ─── Models ───────────────────────────────────────────────────────────────────
-class UploadFeaturesResponse(BaseModel):
-    status: str
-    message: str
+# Load Whisper Model Once
+model = whisper.load_model("tiny.en", device="cpu", download_root="/tmp/whisper")
 
 
-class EvaluateRequest(BaseModel):
-    transcript: str
+# Paths to store FAISS indices
+PD_PATH = "db/product_docs_faiss"
+TP_PATH = "db/top_performers_faiss"
 
 
-class EvaluateResponse(BaseModel):
-    evaluation: str
+
+# # ─── Models ───────────────────────────────────────────────────────────────────
+# class UploadFeaturesResponse(BaseModel):
+#     status: str
+#     message: str
 
 
-class EvaluateAudioResponse(BaseModel):
-    evaluation: str
-    transcript: str  # ✅ Add this line
+# class EvaluateRequest(BaseModel):
+#     transcript: str
+
+
+# class EvaluateResponse(BaseModel):
+#     evaluation: str
+
+
+# class EvaluateAudioResponse(BaseModel):
+#     evaluation: str
+#     transcript: str  # ✅ Add this line
 
 
 # ─── Init ─────────────────────────────────────────────────────────────────────
@@ -85,12 +95,15 @@ Output:
 )
 
 # Embeddings for FAISS
-embeddings = HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2")
+# Vector Store Initialization
+embeddings = HuggingFaceEmbeddings(model_name="paraphrase-MiniLM-L6-v2")
+# top_perf_store = ""
+# product_store = ""
 
 # ─── Helpers ─────────────────────────────────────────────────────────────────
-DB_ROOT = "db/faiss"
-TP_PATH = os.path.join(DB_ROOT, "top_performers")
-PD_PATH = os.path.join(DB_ROOT, "product_docs")
+# DB_ROOT = "db/faiss"
+# TP_PATH = os.path.join(DB_ROOT, "top_performers")
+# PD_PATH = os.path.join(DB_ROOT, "product_docs")
 
 # ─── Utils ────────────────────────────────────────────────────────────────────
 def chunk_text(text: str) -> List[Document]:
@@ -101,39 +114,42 @@ def chunk_text(text: str) -> List[Document]:
     return [Document(page_content=chunk) for chunk in splitter.split_text(text)]
 
 
-def extract_text_from_file(uploaded) -> str:
+def extract_text_from_file(uploaded_file) -> str:
     """
     Extract text from uploaded files (PDF or TXT).
     """
-    content = uploaded.read()
-    if uploaded.filename.lower().endswith(".pdf"):
+    content = uploaded_file.read()
+    if uploaded_file.name.lower().endswith(".pdf"):
         pdf = fitz.open(stream=content, filetype="pdf")
         return "".join(page.get_text() for page in pdf)
-    elif uploaded.filename.lower().endswith(".txt"):
+    elif uploaded_file.name.lower().endswith(".txt"):
         return content.decode("utf-8")
     else:
         raise ValueError("Unsupported file format. Only PDF or TXT allowed.")
 
 
-# ─── Upload Product + Gold Example ──────────────────────────────────────────────
-def upload_product_features(product_file, gold_file=None) -> dict:
+def extract_and_store_in_faiss(product_file, gold_file=None) -> dict:
+    """Extracts text from product and gold example files, stores them in FAISS."""
     try:
-        # 1) ingest product docs
+        # 1) Process product document
         product_text = extract_text_from_file(product_file)
         product_docs = chunk_text(product_text)
-        pd_store = FAISS.from_documents(product_docs, embeddings)
+        product_store = FAISS.from_documents(product_docs, embeddings)
         os.makedirs(PD_PATH, exist_ok=True)
-        pd_store.save_local(PD_PATH)
-
-        msg = "Product doc uploaded."
-        # 2) ingest gold sample if provided
+        product_store.save_local(PD_PATH)
+        
+        gold_text, gold_store = None, None
+        msg = "Product doc uploaded and stored in FAISS."
+        print(product_store)
+        
+        # 2) Process gold sample if provided
         if gold_file:
             gold_text = extract_text_from_file(gold_file)
             gold_docs = chunk_text(gold_text)
-            tp_store = FAISS.from_documents(gold_docs, embeddings)
+            top_perf_store = FAISS.from_documents(gold_docs, embeddings)
             os.makedirs(TP_PATH, exist_ok=True)
-            tp_store.save_local(TP_PATH)
-            msg += " Gold example added."
+            top_perf_store.save_local(TP_PATH)
+            msg += " Gold example added and stored in FAISS."
 
         return {"status": "success", "message": msg}
 
@@ -141,22 +157,102 @@ def upload_product_features(product_file, gold_file=None) -> dict:
         return {"status": "error", "message": str(e)}
 
 
+def evaluate_transcript(transcript: str) -> str:
+    """
+    Load FAISS indices from disk (created via extract_and_store_in_faiss),
+    perform similarity searches, and return LLM evaluation.
+    """
+    # Verify product index
+    if not os.path.isdir(PD_PATH) or not os.listdir(PD_PATH):
+        raise RuntimeError(f"Product FAISS index missing at '{PD_PATH}'. Upload products first.")
+    product_store = FAISS.load_local(
+        PD_PATH,
+        embeddings,
+        allow_dangerous_deserialization=True
+    )
+
+    # Optionally load gold index
+    top_text = ""
+    if os.path.isdir(TP_PATH) and os.listdir(TP_PATH):
+        top_perf_store = FAISS.load_local(
+            TP_PATH,
+            embeddings,
+            allow_dangerous_deserialization=True
+        )
+        top_examples = top_perf_store.vectorstore.similarity_search(transcript, k=3)
+        top_text = "".join(doc.page_content for doc in top_examples)
+
+    # Product similarity
+    prod_examples = product_store.vectorstore.similarity_search(transcript, k=3)
+    prod_text = "".join(doc.page_content for doc in prod_examples)
+
+    # Build prompt and invoke LLM
+    prompt = prompt_template.format(
+        transcript=transcript,
+        top_sample=top_text,
+        product_info=prod_text
+    )
+    response = llm.invoke([{"role": "user", "content": prompt}])
+    return response.content
+
+
+# # ─── Upload Product + Gold Example ──────────────────────────────────────────────
+# def upload_product_features(product_file, gold_file=None) -> dict:
+#     try:
+#         # 1) ingest product docs
+#         product_text = extract_text_from_file(product_file)
+#         product_docs = chunk_text(product_text)
+#         pd_store = FAISS.from_documents(product_docs, embeddings)
+#         os.makedirs(PD_PATH, exist_ok=True)
+#         pd_store.save_local(PD_PATH)
+
+#         msg = "Product doc uploaded."
+#         # 2) ingest gold sample if provided
+#         if gold_file:
+#             gold_text = extract_text_from_file(gold_file)
+#             gold_docs = chunk_text(gold_text)
+#             tp_store = FAISS.from_documents(gold_docs, embeddings)
+#             os.makedirs(TP_PATH, exist_ok=True)
+#             tp_store.save_local(TP_PATH)
+#             msg += " Gold example added."
+
+#         return {"status": "success", "message": msg}
+
+#     except Exception as e:
+#         return {"status": "error", "message": str(e)}
+
+
 # ─── Evaluate Transcript ──────────────────────────────────────────────────────
 
 def evaluate_transcript(transcript: str) -> str:
-    # 1) load the two persisted stores
-    tp_store = FAISS.load_local(TP_PATH, embeddings)
-    pd_store = FAISS.load_local(PD_PATH, embeddings)
-    # 2) retrieve top‐k
-    top_docs  = tp_store.similarity_search(transcript, k=3)
-    prod_docs = pd_store.similarity_search(transcript, k=3)
-    # 3) call LLM
+    # must always load product store
+    product_store = FAISS.load_local(PD_PATH, embeddings, allow_dangerous_deserialization=True)
+    prod_examples = product_store.similarity_search(transcript, k=3)
+    prod_text = "\n".join(doc.page_content for doc in prod_examples)
+
+    # only load top_perf_store if the gold index exists
+    top_text = ""
+    if os.path.isdir(TP_PATH) and os.listdir(TP_PATH):
+        top_perf_store = FAISS.load_local(TP_PATH, embeddings, allow_dangerous_deserialization=True)
+        top_examples   = top_perf_store.similarity_search(transcript, k=3)
+        top_text       = "\n".join(doc.page_content for doc in top_examples)
+
+    # build prompt and invoke LLM
     prompt = prompt_template.format(
-        transcript=transcript,
-        top_sample="\n".join(d.page_content for d in top_docs),
-        product_info="\n".join(d.page_content for d in prod_docs),
+        transcript   = transcript,
+        top_sample   = top_text,
+        product_info = prod_text
     )
     return llm.invoke([{"role": "user", "content": prompt}]).content
+
+    # Build prompt
+    prompt = prompt_template.format(
+        transcript=transcript,
+        top_sample=top_text,
+        product_info=prod_text
+    )
+    response = llm.invoke([{"role": "user", "content": prompt}])
+    return response.content
 
 
 #
@@ -178,43 +274,37 @@ def evaluate_transcript(transcript: str) -> str:
 #         return {"evaluation": f"Audio Evaluation Failed: {str(e)}"}
 
 
-# ─── Evaluate Audio with Whisper ───────────────────────────────────────────────
-def evaluate_audio_whisper(audio_file) -> dict:
-    """
-    Evaluate an audio file using Whisper and perform the same transcript evaluation.
-    """
+def evaluate_audio_whisper(audio_bytes: bytes) -> str:
     try:
-        model = whisper.load_model("tiny.en")
-        audio_bytes = audio_file.read()
-
-        # Write the audio to a temporary WAV file
+        # 1) Write to a temp WAV file
         with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as tmp:
             tmp.write(audio_bytes)
             tmp_path = tmp.name
 
-        # Transcribe using Whisper
+        # 2) Run Whisper transcription
         whisper_result = model.transcribe(tmp_path)
         transcript = whisper_result["text"]
 
-        # Clean up the temporary file
+        # 3) Clean up temp file
         os.remove(tmp_path)
 
-        # Evaluate the transcript
+        # 4) Evaluate the transcript using your existing logic
         evaluation = evaluate_transcript(transcript)
-        return {"transcript": transcript, "evaluation": evaluation}
+        return transcript, evaluation
 
     except Exception as e:
-        return {"evaluation": f"Audio Evaluation Failed: {str(e)}"}
+        return str(e)
 
 
-# ─── Initialize Real-Time STT Recorder ─────────────────────────────────────────
-recorder = AudioToTextRecorder(
-    spinner=False,
-    silero_sensitivity=0.01,
-    model="tiny.en",
-    language="en"  # Disable continuous mic capture
-)
 
-# Immediately turn its mic off so it won’t buffer live audio
-recorder.set_microphone(False)
+# # Example usage (replace with actual file paths)
+# product_file = open("temp\Product Features Document.pdf", "rb")  # Replace with your actual product file path
+# gold_file = open("temp\Gold eg.txt", "rb")  # Optional: Replace with your actual gold file path
+# # Assuming product_docs is a list of documents and embeddings is the vectorizer
+# product_store = FAISS.from_documents(product_file, embeddings)
+
+# # You can now use the product_store for operations like similarity search
+# query = "example query text"
+# results = product_store.similarity_search(query, k=5)
+# print(results)
 
