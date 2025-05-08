@@ -305,11 +305,11 @@ async def evaluate_audio(audio_file: UploadFile = File(...)):
 
 # Mandatory Render port configuration
 # At bottom of main.py
-if __name__ == "__main__":
-    import uvicorn
-    uvicorn.run(
-        app,
-        host="0.0.0.0",
-        port=int(os.environ.get("PORT", 8000)),  # 8000 for local, $PORT in Render
-        workers=1
-    )
+# if __name__ == "__main__":
+#     import uvicorn
+#     uvicorn.run(
+#         app,
+#         host="0.0.0.0",
+#         port=int(os.environ.get("PORT", 8000)),  # 8000 for local, $PORT in Render
+#         workers=1
+#     )
