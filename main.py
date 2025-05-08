@@ -86,7 +86,9 @@ Output:
 """
 )
 
-embeddings = HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2")
+# embeddings = HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2")
+embeddings = HuggingFaceEmbeddings(model_name="paraphrase-MiniLM-L6-v2")
+
 
 # # ─── Vector Stores ────────────────────────────────────────────────────────────
 # # Always load existing FAISS indices; they must be created via /upload_product_features first
