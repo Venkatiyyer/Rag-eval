@@ -55,16 +55,7 @@ st.sidebar.markdown('<div class="sidebar-step">1. Upload doc & examples</div>', 
 st.sidebar.markdown('<div class="sidebar-step">2. Input (text/voice)</div>', unsafe_allow_html=True)
 st.sidebar.markdown('<div class="sidebar-step">3. Get score</div>', unsafe_allow_html=True)
 
-st.markdown("""
-<h2 style="margin-top:20px; font-weight:bold;">
-  <span style="background: linear-gradient(90deg, #0021F3, #9400D3, #EE82EE);
-    -webkit-background-clip: text; -webkit-text-fill-color: transparent;">
-    Hello there!</span>
-  <span style="background: linear-gradient(90deg, #8A2BE2, #FF69B4);
-    -webkit-background-clip: text; -webkit-text-fill-color: transparent;">
-    Ready to evaluate?</span>
-</h2>
-""", unsafe_allow_html=True)
+
 
 # ─── Sidebar Page Navigation ─────────────────────────────────────────────────
 page = st.sidebar.radio("*Go to*", ["Upload", "Transcript Evaluation", "Audio Evaluation"])
@@ -76,6 +67,17 @@ with col_icon:
     st.image("static/recognition.png", width=50)
 with col_title:
     st.markdown("## RAG-Eval")
+    
+st.markdown("""
+<h2 style="margin-top:14px; font-weight:bold;">
+  <span style="background: linear-gradient(90deg, #0021F3, #9400D3, #EE82EE);
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent;">
+    Hello there!</span>
+  <span style="background: linear-gradient(90deg, #8A2BE2, #FF69B4);
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent;">
+    Ready to evaluate?</span>
+</h2>
+""", unsafe_allow_html=True)
 
 # ───# Page 1: Upload ───────────────────────────────────────────────────────────
 if page == "Upload":
@@ -85,7 +87,7 @@ if page == "Upload":
         with col1:
             product_file = st.file_uploader("Upload Product Features (PDF/TXT)", type=["pdf", "txt"])
         with col2:
-            gold_file = st.file_uploader("Upload Gold Example (PDF/TXT)", type=["pdf", "txt"])
+            gold_file = st.file_uploader("Upload Top-Performing  Sample (PDF/TXT)", type=["pdf", "txt"])
 
         if st.button("⬆️ Upload Files"):
             if not product_file:
@@ -108,85 +110,83 @@ if page == "Upload":
                     st.error(f"❌ Error during upload: {str(e)}")
 
 
-
-# # ─── Page 1: Upload ───────────────────────────────────────────────────────────
-# if page == "Upload":
-#     st.image("static/upload.png", width=50)
-
-#     with st.expander("📁 Upload Product Features and Gold Example", expanded=True):
-#         col1, col2 = st.columns(2)
-
-#         with col1:
-#             product_file = st.file_uploader("Upload Product Features (PDF/TXT)", type=["pdf", "txt"])
-
-#         with col2:
-#             gold_file = st.file_uploader("Upload Gold Example (PDF/TXT)", type=["pdf", "txt"])
-
-#         if st.button("⬆️ Upload Files"):
-#             if not product_file:
-#                 st.warning("⚠️ Please upload the product features file.")
-#             else:
-#                 # try:
-#                 with st.spinner("📤 Processing files..."):
-#                     result = extract_and_store_in_faiss(product_file, gold_file)
-#                     print(result)
-                        
-                        
-
-                #     if result["status"] == "success":
-                #         st.session_state["product_text"] = result["product_text"]
-                #         st.session_state["gold_text"] = result["gold_text"] if gold_file else None
-
-                #         if gold_file:
-                #             st.success("✅ Both product features and gold example uploaded successfully!")
-                #         else:
-                #             st.success("✅ Product features uploaded successfully! (No gold example provided)")
-                #     else:
-                #         st.error(f"❌ Error during upload: {result['message']}")
-
-                # except Exception as e:
-                #     st.error(f"❌ An unexpected error occurred: {str(e)}")
-
-
 # ─── Page 2: Transcript Evaluation ────────────────────────────────────────────
 elif page == "Transcript Evaluation":
     st.image("static/transcript.png", width=50)
-    with st.expander("📝 Enter and Evaluate Transcript", expanded=True):
-        txt = st.text_area("Enter Transcript for Evaluation")
-        if st.button("🔍 Evaluate Transcript"):
-            if not txt.strip():
-                st.warning("⚠️ Please enter a transcript.")
-            else:
-                result = evaluate_transcript(txt)
-                st.subheader("📊 Evaluation Results")
+    st.subheader("📝 Enter and Evaluate Transcript")
+    
+    txt = st.text_area("Enter Transcript for Evaluation")
+    
+    if st.button("🔍 Evaluate Transcript"):
+        if not txt.strip():
+            st.warning("⚠️ Please enter a transcript.")
+        else:
+            result = evaluate_transcript(txt)
+            
+            # Expander for the evaluation result
+            with st.expander("📊 Evaluation Results", expanded=True):
                 st.markdown(result, unsafe_allow_html=True)
 
-# ─── Page 3: Audio Evaluation ─────────────────────────────────────────────────
+
+# # ─── Page 3: Audio Evaluation ─────────────────────────────────────────────────
+# elif page == "Audio Evaluation":
+#     st.image("static/mic.png", width=50)
+#     with st.expander("🎙️ Record and Evaluate Audio", expanded=True):
+#         audio_data = mic_recorder(
+#             start_prompt="🎤 Start recording",
+#             stop_prompt="⏹️ Stop recording",
+#             just_once=True,
+#             format="wav",
+#             key="wave_recorder"
+#         )
+
+#         if audio_data and "wav_bytes" not in st.session_state:
+#             st.session_state["wav_bytes"] = audio_data["bytes"]
+
+#         if "wav_bytes" in st.session_state:
+#             wav = st.session_state["wav_bytes"]
+#             st.audio(wav, format="audio/wav")
+
+#             if st.button("🎧 Evaluate Audio"):
+#                 with st.spinner("🔎 Evaluating audio with Whisper..."):
+#                     result = evaluate_audio_whisper(wav)
+
+#                 st.subheader("🗒️ Transcript:")
+#                 st.code(result.get("transcript", "—"))
+
+#                 st.subheader("📊 Evaluation:")
+#                 st.markdown(result.get("evaluation" ,"—"), unsafe_allow_html=True)
+#                 # st.markdown(result, unsafe_allow_html=True)
+
+# ─── Page 3: Audio Evaluation ───────────────────────────────────────────────
 elif page == "Audio Evaluation":
     st.image("static/mic.png", width=50)
-    with st.expander("🎙️ Record and Evaluate Audio", expanded=True):
-        audio_data = mic_recorder(
-            start_prompt="🎤 Start recording",
-            stop_prompt="⏹️ Stop recording",
-            just_once=True,
-            format="wav",
-            key="wave_recorder"
-        )
 
-        if audio_data and "wav_bytes" not in st.session_state:
-            st.session_state["wav_bytes"] = audio_data["bytes"]
+    audio_data = mic_recorder(
+        start_prompt="🎤 Start Recording",
+        stop_prompt="⏹️ Stop Recording",
+        just_once=True,
+        format="wav",
+        key="wave_recorder"
+    )
 
-        if "wav_bytes" in st.session_state:
-            wav = st.session_state["wav_bytes"]
-            st.audio(wav, format="audio/wav")
+    if audio_data and "wav_bytes" not in st.session_state:
+        st.session_state["wav_bytes"] = audio_data["bytes"]
 
-            if st.button("🎧 Evaluate Audio"):
-                with st.spinner("🔎 Evaluating audio with Whisper..."):
-                    result = evaluate_audio_whisper(wav)
+    if "wav_bytes" in st.session_state:
+        wav = st.session_state["wav_bytes"]
+        st.audio(wav, format="audio/wav")
 
-                st.subheader("🗒️ Transcript:")
+        if st.button("🧠 Evaluate Audio"):
+            with st.spinner("🔎 Processing and evaluating the recording..."):
+                result = evaluate_audio_whisper(wav)
+
+            # Show Transcript in Expander
+            with st.expander("🗒️ Transcript", expanded=False):
                 st.code(result.get("transcript", "—"))
 
-                st.subheader("📊 Evaluation:")
-                st.markdown(result.get("evaluation" ,"—"), unsafe_allow_html=True)
-                # st.markdown(result, unsafe_allow_html=True)
+            # Show Evaluation
+            st.markdown("### 📊 Evaluation Summary")
+            st.markdown(result.get("evaluation", "—"), unsafe_allow_html=True)
+                  
+

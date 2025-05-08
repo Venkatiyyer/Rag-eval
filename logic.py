@@ -15,7 +15,6 @@ from langchain.embeddings import HuggingFaceEmbeddings
 from langchain.vectorstores import FAISS  # Replaced Chroma with FAISS
 from langchain.schema import Document
 from langchain.text_splitter import RecursiveCharacterTextSplitter
-# from RealtimeSTT import AudioToTextRecorder  # Import your real-time STT recorder
 import tempfile
 
 # ─── Load Whisper Model Once ─────────────────────────────────────────────────
