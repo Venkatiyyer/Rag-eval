@@ -5,7 +5,8 @@ services:
     plan: free
     buildCommand:""
 
-    startCommand: Start Command: uvicorn main:app --host 0.0.0.0 --port $PORT --workers 1 --log-level info
+    startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT --workers 1 --log-level info
+
     envVars:
       - key: PORT
         value: 10000
