@@ -17,8 +17,7 @@ from langchain.schema import Document
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 import tempfile
 
-# ─── Load Whisper Model Once ─────────────────────────────────────────────────
-# model = whisper.load_model("tiny.en")  # or "base", "medium", "large"
+
 
 # Load Whisper Model Once
 model = whisper.load_model("tiny.en", device="cpu", download_root="/tmp/whisper")
@@ -94,15 +93,8 @@ Output:
 )
 
 # Embeddings for FAISS
-# Vector Store Initialization
 embeddings = HuggingFaceEmbeddings(model_name="paraphrase-MiniLM-L6-v2")
-# top_perf_store = ""
-# product_store = ""
 
-# ─── Helpers ─────────────────────────────────────────────────────────────────
-# DB_ROOT = "db/faiss"
-# TP_PATH = os.path.join(DB_ROOT, "top_performers")
-# PD_PATH = os.path.join(DB_ROOT, "product_docs")
 
 # ─── Utils ────────────────────────────────────────────────────────────────────
 def chunk_text(text: str) -> List[Document]:
@@ -191,31 +183,6 @@ def evaluate_transcript(transcript: str) -> str:
     return response.content
 
 
-# # ─── Upload Product + Gold Example ──────────────────────────────────────────────
-# def upload_product_features(product_file, gold_file=None) -> dict:
-#     try:
-#         # 1) ingest product docs
-#         product_text = extract_text_from_file(product_file)
-#         product_docs = chunk_text(product_text)
-#         pd_store = FAISS.from_documents(product_docs, embeddings)
-#         os.makedirs(PD_PATH, exist_ok=True)
-#         pd_store.save_local(PD_PATH)
-
-#         msg = "Product doc uploaded."
-#         # 2) ingest gold sample if provided
-#         if gold_file:
-#             gold_text = extract_text_from_file(gold_file)
-#             gold_docs = chunk_text(gold_text)
-#             tp_store = FAISS.from_documents(gold_docs, embeddings)
-#             os.makedirs(TP_PATH, exist_ok=True)
-#             tp_store.save_local(TP_PATH)
-#             msg += " Gold example added."
-
-#         return {"status": "success", "message": msg}
-
-#     except Exception as e:
-#         return {"status": "error", "message": str(e)}
-
 
 # ─── Evaluate Transcript ──────────────────────────────────────────────────────
 
@@ -232,13 +199,7 @@ def evaluate_transcript(transcript: str) -> str:
         top_examples   = top_perf_store.similarity_search(transcript, k=3)
         top_text       = "\n".join(doc.page_content for doc in top_examples)
 
-    # # build prompt and invoke LLM
-    # prompt = prompt_template.format(
-    #     transcript   = transcript,
-    #     top_sample   = top_text,
-    #     product_info = prod_text
-    # )
-    # return llm.invoke([{"role": "user", "content": prompt}]).content
+    
 
     # Build prompt
     prompt = prompt_template.format(
