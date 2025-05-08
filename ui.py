@@ -128,7 +128,6 @@ elif page == "Transcript Evaluation":
                 st.markdown(result, unsafe_allow_html=True)
 
 
-# # ─── Page 3: Audio Evaluation ─────────────────────────────────────────────────
 # elif page == "Audio Evaluation":
 #     st.image("static/mic.png", width=50)
 #     with st.expander("🎙️ Record and Evaluate Audio", expanded=True):
