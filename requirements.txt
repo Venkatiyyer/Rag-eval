@@ -17,7 +17,7 @@ requests
 PyAudio
 langchain-community
 faiss-cpu
-
+ffmpeg-python
 protobuf==3.20.*
 
 
