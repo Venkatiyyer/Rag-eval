@@ -230,7 +230,7 @@ def evaluate_transcript(transcript: str) -> str:
 #         return {"evaluation": f"Audio Evaluation Failed: {str(e)}"}
 
 
-def evaluate_audio_whisper(audio_bytes: bytes) -> str:
+def evaluate_audio_whisper(audio_bytes: bytes) -> dict:
     try:
         # 1) Write to a temp WAV file
         with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as tmp:
